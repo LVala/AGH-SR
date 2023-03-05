@@ -31,24 +31,18 @@ defmodule Chat.Client do
   end
 
   defp open(address, port, mc_address, mc_port) do
+    opts = [:binary, active: false, reuseaddr: true]
+
     with {:ok, tcp_socket} <-
-           :gen_tcp.connect(address, port, [
-             :binary,
-             packet: :line,
-             active: false,
-             reuseaddr: true
-           ]),
+           :gen_tcp.connect(address, port, opts ++ [packet: :line]),
          {:ok, {_address, local_port}} <- :inet.sockname(tcp_socket),
          {:ok, udp_socket} <-
-           :gen_udp.open(local_port, [:binary, active: false, reuseaddr: true]),
+           :gen_udp.open(local_port, opts),
          {:ok, udp_mc_socket} <-
-           :gen_udp.open(mc_port, [
-             :binary,
-             active: false,
-             reuseaddr: true,
-             ip: mc_address,
-             add_membership: {mc_address, {0, 0, 0, 0}}
-           ]) do
+           :gen_udp.open(
+             mc_port,
+             opts ++ [ip: mc_address, add_membership: {mc_address, {0, 0, 0, 0}}]
+           ) do
       Task.start_link(fn -> loop_tcp_receiver(tcp_socket) end)
       Task.start_link(fn -> loop_udp_receiver(udp_socket, local_port) end)
       Task.start_link(fn -> loop_udp_receiver(udp_mc_socket, local_port) end)
