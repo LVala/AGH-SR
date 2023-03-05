@@ -1,5 +1,5 @@
 defmodule Chat.Client do
-  @udp_data """
+  @udp_data ~S"""
 
                 ;'-.
     `;-._        )  '---.._
@@ -8,7 +8,7 @@ defmodule Chat.Client do
      `       `'------/_.'----```
   """
 
-  @mc_udp_data """
+  @mc_udp_data ~S"""
 
                     ,,__
         ..  ..   / o._)
@@ -31,8 +31,6 @@ defmodule Chat.Client do
   end
 
   defp open(address, port, mc_address, mc_port) do
-    IO.puts("Chat client\nPress Ctrl-C to leave\n--------")
-
     with {:ok, tcp_socket} <-
            :gen_tcp.connect(address, port, [
              :binary,
@@ -53,10 +51,15 @@ defmodule Chat.Client do
              add_membership: {mc_address, {0, 0, 0, 0}}
            ]) do
       Task.start_link(fn -> loop_tcp_receiver(tcp_socket) end)
-      Task.start_link(fn -> loop_udp_receiver(udp_socket) end)
-      Task.start_link(fn -> loop_udp_receiver(udp_mc_socket) end)
+      Task.start_link(fn -> loop_udp_receiver(udp_socket, local_port) end)
+      Task.start_link(fn -> loop_udp_receiver(udp_mc_socket, local_port) end)
 
-      loop_sender({tcp_socket, udp_socket, udp_mc_socket}, {mc_address, mc_port}, true)
+      loop_sender(
+        {tcp_socket, udp_socket},
+        {address, port},
+        {mc_address, mc_port},
+        true
+      )
     else
       {:error, reason} ->
         IO.puts("Connection failed, reason: #{reason}")
@@ -64,19 +67,19 @@ defmodule Chat.Client do
     end
   end
 
-  defp loop_sender({tcp_socket, udp_socket, udp_mc_socket} = sockets, addr, get_name?) do
+  defp loop_sender({tcp_socket, udp_socket} = sockets, addr, mc_addr, get_name?) do
     prompt = if get_name?, do: "Name: ", else: ">>> "
     data = IO.gets(prompt)
 
     case data do
       # dont send empty strings
       "\n" ->
-        loop_sender(sockets, addr, get_name?)
+        loop_sender(sockets, addr, mc_addr,get_name?)
 
       "U\n" when not get_name? ->
-        case :gen_udp.send(udp_socket, @udp_data) do
+        case :gen_udp.send(udp_socket, addr, @udp_data) do
           :ok ->
-            loop_sender(sockets, addr, get_name?)
+            loop_sender(sockets, addr, mc_addr, get_name?)
 
           {:error, reason} ->
             IO.puts("Failed to send UDP data, reason: #{reason}")
@@ -84,9 +87,9 @@ defmodule Chat.Client do
         end
 
       "M\n" when not get_name? ->
-        case :gen_udp.send(udp_mc_socket, addr, @mc_udp_data) do
+        case :gen_udp.send(udp_socket, mc_addr, @mc_udp_data) do
           :ok ->
-            loop_sender(sockets, addr, get_name?)
+            loop_sender(sockets, addr, mc_addr, get_name?)
 
           {:error, reason} ->
             IO.puts("Failed to send UDP data to multicast address, reason #{reason}")
@@ -96,7 +99,7 @@ defmodule Chat.Client do
       _other ->
         case :gen_tcp.send(tcp_socket, data) do
           :ok ->
-            loop_sender(sockets, addr, false)
+            loop_sender(sockets, addr, mc_addr, false)
 
           {:error, reason} ->
             IO.puts("Connection terminated, reason: #{reason}")
@@ -117,11 +120,18 @@ defmodule Chat.Client do
     end
   end
 
-  defp loop_udp_receiver(socket) do
+  defp loop_udp_receiver(socket, local_port) do
     case :gen_udp.recv(socket, 0) do
-      {:ok, {_address, _port, data}} ->
-        IO.write(data)
-        loop_udp_receiver(socket)
+      {:ok, {address, port, data}} ->
+        # hacky
+        {:ok, addresses} = :inet.getifaddrs()
+        local? =
+          addresses
+          |> Enum.map(fn {_id, info} -> Keyword.fetch!(info, :addr) end)
+          |> Enum.any?(fn addr -> {addr, local_port} == {address, port} end)
+
+        if not local?, do: IO.write(data)
+        loop_udp_receiver(socket, local_port)
 
       {:error, reason} ->
         IO.puts("UDP datagram could not be received, reason: #{reason}")
