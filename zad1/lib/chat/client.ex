@@ -74,7 +74,7 @@ defmodule Chat.Client do
     case data do
       # dont send empty strings
       "\n" ->
-        loop_sender(sockets, addr, mc_addr,get_name?)
+        loop_sender(sockets, addr, mc_addr, get_name?)
 
       "U\n" when not get_name? ->
         case :gen_udp.send(udp_socket, addr, @udp_data) do
@@ -125,6 +125,7 @@ defmodule Chat.Client do
       {:ok, {address, port, data}} ->
         # hacky
         {:ok, addresses} = :inet.getifaddrs()
+
         local? =
           addresses
           |> Enum.map(fn {_id, info} -> Keyword.fetch!(info, :addr) end)

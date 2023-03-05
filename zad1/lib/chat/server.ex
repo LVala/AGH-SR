@@ -8,11 +8,11 @@ defmodule Chat.Server do
       SocketRegister,
       {Task.Supervisor, name: Chat.Server.SocketSupervisor, strategy: :one_for_one},
       Supervisor.child_spec({Task, fn -> UDP.open(port) end},
-        id: :udp_accepter,
+        id: :udp,
         restart: :permanent
       ),
       Supervisor.child_spec({Task, fn -> TCP.accept(port) end},
-        id: :tcp_accepter,
+        id: :tcp,
         restart: :permanent
       )
     ]
