@@ -41,7 +41,6 @@ defmodule Chat.Client do
          {:ok, {_address, local_port}} <- :inet.sockname(tcp_socket),
          {:ok, udp_socket} <-
            :gen_udp.open(local_port, [:binary, active: false, reuseaddr: true]),
-         :ok <- :gen_udp.connect(udp_socket, address, port),
          {:ok, udp_mc_socket} <-
            :gen_udp.open(mc_port, [
              :binary,
@@ -72,8 +71,8 @@ defmodule Chat.Client do
     data = IO.gets(prompt)
 
     case data do
-      # dont send empty strings
       "\n" ->
+        # dont send empty strings
         loop_sender(sockets, addr, mc_addr, get_name?)
 
       "U\n" when not get_name? ->
