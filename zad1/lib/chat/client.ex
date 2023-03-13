@@ -121,6 +121,7 @@ defmodule Chat.Client do
 
         local? =
           addresses
+          |> Enum.filter(fn {_id, info} -> Keyword.has_key?(info, :addr) end)
           |> Enum.map(fn {_id, info} -> Keyword.fetch!(info, :addr) end)
           |> Enum.any?(fn addr -> {addr, local_port} == {address, port} end)
 
